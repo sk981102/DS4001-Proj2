@@ -18,14 +18,18 @@ train$GROSS.SQUARE.FEET<-as.numeric(train$GROSS.SQUARE.FEET)
 train<-train%>%mutate(
   COMMERCIAL.UNITS=ifelse(COMMERCIAL.UNITS==0,F,T),
   RESIDENTIAL.UNITS=ifelse(RESIDENTIAL.UNITS==0,F,T),
-  TOTAL.UNITS=ifelse(TOTAL.UNITS==0,F,T)
+  TOTAL.UNITS=ifelse(TOTAL.UNITS==0,F,T),
+  YEAR.BUILT=ifelse(YEAR.BUILT==0,1932,YEAR.BUILT)
+  
 )
 
 train_prepared<-train%>%select(
   -BOROUGH, -EASE.MENT, -ADDRESS,-ZIP.CODE
 )
 
+
 summary(train_prepared)
+
 
 #TEST DATASET CLEANING
 test$TAX.CLASS.AT.TIME.OF.SALE<-as.factor(test$TAX.CLASS.AT.TIME.OF.SALE)

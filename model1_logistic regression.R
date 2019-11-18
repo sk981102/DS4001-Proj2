@@ -9,12 +9,12 @@ attach(train_prepared)
 
 model<-glm(high.end~ NEIGHBORHOOD+BUILDING.CLASS.CATEGORY+TAX.CLASS.AT.PRESENT+
              BLOCK+LOT+RESIDENTIAL.UNITS+
-             COMMERCIAL.UNITS+LAND.SQUARE.FEET+GROSS.SQUARE.FEET+
+             COMMERCIAL.UNITS+LAND.SQUARE.FEET+GROSS.SQUARE.FEET+YEAR.BUILT
              TAX.CLASS.AT.TIME.OF.SALE,family=binomial)
 summary(model)
 pred<-predict(model,newdata=train_prepared)
 
-rates<-prediction(pred, teain_prepared$high.end)
+rates<-prediction(pred, train_prepared$high.end)
 roc_result<-performance(rates,measure="tpr", x.measure="fpr")
 plot(roc_result, main="ROC Curve")+lines(x = c(0,1), y = c(0,1), col="red")
 
@@ -30,10 +30,14 @@ head(sub)
 submission<-read.csv("sample_submission.csv")
 submission<-cbind(submission,sub)
 names<-c("ID","high.end")
-submission%>%mutate(
+submission<-submission%>%mutate(
   high.end=sub
+) %>% select(
+  ID, high.end
 )
+head(submission)
 
+write.csv(submission,"submission1.csv",row.names = F)
 ## model 2 using Logistic regression
 model2<-glm(high.end~ NEIGHBORHOOD+BUILDING.CLASS.CATEGORY+
              BLOCK+LOT+BUILDING.CLASS.AT.PRESENT+RESIDENTIAL.UNITS+
