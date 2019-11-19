@@ -1,0 +1,157 @@
+---
+title: "NY Housing Cleaning"
+output: pdf_document
+author: "Alex Stern"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Evaluation of Missingness
+```{r message=FALSE}
+setwd("~/Desktop/ds4001")
+train <- read.csv("sales_manhattan_train_set.csv", stringsAsFactors = FALSE)
+# ensure the same data manipulation is performed on the test set, seperately 
+test <- read.csv("sales_manhattan_test_set.csv", stringsAsFactors = FALSE)
+summary(train)
+summary(train$EASE.MENT)
+nrow(train)
+
+# Tax class at present has missing values as well
+# 2 is by far the mode for this class, therefore 2 will be imputed for all ""
+train$TAX.CLASS.AT.PRESENT[which((train$TAX.CLASS.AT.PRESENT) == "")] <- "2"
+test$TAX.CLASS.AT.PRESENT[which((test$TAX.CLASS.AT.PRESENT) == "")] <- "2"
+# replace missing building class at present values with the mode
+train$BUILDING.CLASS.AT.PRESENT[which((train$BUILDING.CLASS.AT.PRESENT) == "")] <- "R4"
+test$BUILDING.CLASS.AT.PRESENT[which((test$BUILDING.CLASS.AT.PRESENT) == "")] <- "R4"
+# TAX CLASS AT SALE should be a factor as well
+train$TAX.CLASS.AT.TIME.OF.SALE <- as.factor(train$TAX.CLASS.AT.TIME.OF.SALE)
+test$TAX.CLASS.AT.TIME.OF.SALE <- as.factor(test$TAX.CLASS.AT.TIME.OF.SALE)
+# zip code should be a factor
+train$ZIP.CODE <- as.factor(train$ZIP.CODE)
+test$ZIP.CODE <- as.factor(test$ZIP.CODE)
+# ensure 0 isn't used in calculating the mean
+train$YEAR.BUILT[train$YEAR.BUILT == 0] <- NA
+test$YEAR.BUILT[test$YEAR.BUILT == 0] <- NA
+# replace missing year values with median (since a few buildings will be very old)
+train$YEAR.BUILT[is.na(train$YEAR.BUILT)] <- median(train$YEAR.BUILT, na.rm = TRUE)
+test$YEAR.BUILT[is.na(test$YEAR.BUILT)] <- median(test$YEAR.BUILT, na.rm = TRUE)
+# Since the value of "EASE.MENT" in every row is NA, the feature can be dropped without losing any information, apt number should be dopped too due to lack of info it provides
+# borough is the same for every row and can be dropped
+drops <- c("EASE.MENT", "APARTMENT.NUMBER", "BOROUGH")
+train <- train[ , !(names(train) %in% drops)]
+test <- test[ , !(names(test) %in% drops)]
+write.csv(unique(train$NEIGHBORHOOD), "neighborhoods.csv")
+```
+
+
+## Feature Manipulation and Creation
+```{r}
+library(lubridate)
+library(ggplot2)
+library(tidyverse)
+train$sale_year <- year(mdy(train$SALE.DATE))
+train$sale_month <- month(mdy(train$SALE.DATE))
+train$sale_day <- day(mdy(train$SALE.DATE))
+
+test$sale_year <- year(mdy(test$SALE.DATE))
+test$sale_month <- month(mdy(test$SALE.DATE))
+test$sale_day <- day(mdy(test$SALE.DATE))
+
+train$sale_minus_built <- (train$sale_year - train$YEAR.BUILT)
+test$sale_minus_built <- (test$sale_year - test$YEAR.BUILT)
+# pull the year, month, and day as individual features
+# drop origianl date column which no longer provides any value
+# drop zip code (many missing values), address (little info)
+# the vast majority have no land square feet
+# half are missing gross square feet
+# "LAND.SQUARE.FEET", "GROSS.SQUARE.FEET"
+drops <- c("SALE.DATE", "ZIP.CODE", "ADDRESS", "BUILDING.CLASS.AT.PRESENT", "LOT", "TAX.CLASS.AT.PRESENT")
+train <- train[ , !(names(train) %in% drops)]
+test <- test[ , !(names(test) %in% drops)]
+
+building_class_same <- c()
+for (i in 1:nrow(train)) {
+  if (train[i,"BUILDING.CLASS.CATEGORY"] == train[i,"BUILDING.CLASS.AT.TIME.OF.SALE"]) {
+    building_class_same <- c(building_class_same, 1)
+  }
+  else {
+    building_class_same <- c(building_class_same, 0)
+  }
+}
+train$building_class_same <- building_class_same
+
+building_class_same <- c()
+for (i in 1:nrow(test)) {
+  if (test[i,"BUILDING.CLASS.CATEGORY"] == test[i,"BUILDING.CLASS.AT.TIME.OF.SALE"]) {
+    building_class_same <- c(building_class_same, 1)
+  }
+  else {
+    building_class_same <- c(building_class_same, 0)
+  }
+}
+test$building_class_same <- building_class_same
+
+train <- transform(train, GROSS.SQUARE.FEET = as.numeric(GROSS.SQUARE.FEET))
+train <- transform(train, LAND.SQUARE.FEET = as.numeric(LAND.SQUARE.FEET))
+train<-train%>%mutate(
+  GROSS.SQUARE.FEET=ifelse(GROSS.SQUARE.FEET<2,NA,GROSS.SQUARE.FEET),
+  LAND.SQUARE.FEET=ifelse(LAND.SQUARE.FEET<2,NA,LAND.SQUARE.FEET)
+)
+train$GROSS.SQUARE.FEET[is.na(train$GROSS.SQUARE.FEET)] <- median(train$GROSS.SQUARE.FEET, na.rm = TRUE)
+train$LAND.SQUARE.FEET[is.na(train$LAND.SQUARE.FEET)] <- median(train$LAND.SQUARE.FEET, na.rm = TRUE)
+
+test <- transform(test, GROSS.SQUARE.FEET = as.numeric(GROSS.SQUARE.FEET))
+test <- transform(test, LAND.SQUARE.FEET = as.numeric(LAND.SQUARE.FEET))
+test<-test%>%mutate(
+  GROSS.SQUARE.FEET=ifelse(GROSS.SQUARE.FEET<2,NA,GROSS.SQUARE.FEET),
+  LAND.SQUARE.FEET=ifelse(LAND.SQUARE.FEET<2,NA,LAND.SQUARE.FEET)
+)
+test$GROSS.SQUARE.FEET[is.na(test$GROSS.SQUARE.FEET)] <- median(test$GROSS.SQUARE.FEET, na.rm = TRUE)
+test$LAND.SQUARE.FEET[is.na(test$LAND.SQUARE.FEET)] <- median(test$LAND.SQUARE.FEET, na.rm = TRUE)
+
+# from Shaun's data manipulation
+train$high.end<-as.factor(train$high.end)
+train$TAX.CLASS.AT.TIME.OF.SALE<-as.factor(train$TAX.CLASS.AT.TIME.OF.SALE)
+
+train<-train%>%mutate(
+  COMMERCIAL.UNITS=ifelse(COMMERCIAL.UNITS==0,F,T),
+  RESIDENTIAL.UNITS=ifelse(RESIDENTIAL.UNITS==0,F,T),
+  TOTAL.UNITS=ifelse(TOTAL.UNITS==0,F,T)
+)
+
+test$TAX.CLASS.AT.TIME.OF.SALE<-as.factor(test$TAX.CLASS.AT.TIME.OF.SALE)
+
+test<-test%>%mutate(
+  COMMERCIAL.UNITS=ifelse(COMMERCIAL.UNITS==0,F,T),
+  RESIDENTIAL.UNITS=ifelse(RESIDENTIAL.UNITS==0,F,T),
+  TOTAL.UNITS=ifelse(TOTAL.UNITS==0,F,T)
+)
+summary(train)
+write_csv(train, "train_clean2.csv")
+write_csv(test, "test_clean2.csv")
+```
+The following variables will be encoded into dummy categorical variables via a pipeline in Python before the final model is fit: NEIGHBORHOOD, BUILDING.CLASS.CATEGORY, TAX.CLASS.AT.PRESENT, BUILDING.CLASS.AT.PRESENT, TAX.CLASS.AT.TIME.OF.SALE, BUILDING.CLASS.AT.TIME.OF.SALE, RESIDENTIAL.UNITS, COMMERCIAL.UNITS, TOTAL.UNITS, building_class_same (is already dummy coded)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
