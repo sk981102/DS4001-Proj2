@@ -3,6 +3,7 @@ library(ggplot2)
 train<-read.csv("sales_manhattan_train_set.csv")
 test<-read.csv("sales_manhattan_test_set.csv")
 
+
 summary(train)
 summary(test)
 #getting rid of Borough, EASE.MENT, ADDRESS

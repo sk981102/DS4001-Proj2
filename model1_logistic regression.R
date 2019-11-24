@@ -10,7 +10,7 @@ attach(train_prepared)
 model<-glm(high.end~ NEIGHBORHOOD+BUILDING.CLASS.CATEGORY+TAX.CLASS.AT.PRESENT+
              BLOCK+LOT+RESIDENTIAL.UNITS+
              COMMERCIAL.UNITS+LAND.SQUARE.FEET+GROSS.SQUARE.FEET+YEAR.BUILT
-             TAX.CLASS.AT.TIME.OF.SALE,family=binomial)
+             +TAX.CLASS.AT.TIME.OF.SALE,family=binomial)
 summary(model)
 pred<-predict(model,newdata=train_prepared)
 
