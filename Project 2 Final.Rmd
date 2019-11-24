@@ -1,6 +1,6 @@
 ---
 title: "Project 2 Final"
-author: "Siyeon Shaun Kim (sk5ps), Alex Stern, Josh Eilen"
+author: "Siyeon Shaun Kim (sk5ps), Alex Stern (acs4wq), Josh Eilen"
 date: "11/24/2019"
 output: html_document
 ---
@@ -9,18 +9,20 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(ggplot2)
+library(lubridate)
 ```
 
 ##Data Cleaning
 ```{r}
 train<-read.csv("sales_manhattan_train_set.csv")
 test<-read.csv("sales_manhattan_test_set.csv")
-
+# we must coerce the data into more purposeful data types
 train$high.end<-as.factor(train$high.end)
 train$TAX.CLASS.AT.TIME.OF.SALE<-as.factor(train$TAX.CLASS.AT.TIME.OF.SALE)
 train$LAND.SQUARE.FEET<-as.numeric(train$LAND.SQUARE.FEET)
 train$GROSS.SQUARE.FEET<-as.numeric(train$GROSS.SQUARE.FEET)
-
+# missing data in YEAR.BUILT must be accounted for
+# binary T/F variables are created if the building had any commerical/residential units
 train<-train%>%mutate(
   COMMERCIAL.UNITS=ifelse(COMMERCIAL.UNITS==0,F,T),
   RESIDENTIAL.UNITS=ifelse(RESIDENTIAL.UNITS==0,F,T),
@@ -28,7 +30,13 @@ train<-train%>%mutate(
   YEAR.BUILT=ifelse(YEAR.BUILT==0,1932,YEAR.BUILT)
   
 )
-
+# lubridate used to extract the month, day, and year of the sale
+train$sale_year <- year(mdy(train$SALE.DATE))
+train$sale_month <- month(mdy(train$SALE.DATE))
+train$sale_day <- day(mdy(train$SALE.DATE))
+# how old is the building at the time of sale?
+train$sale_minus_built <- (train$sale_year - train$YEAR.BUILT)
+# drop features that will not be used
 train_prepared<-train%>%select(
   -BOROUGH, -EASE.MENT, -ADDRESS
 )
@@ -39,16 +47,24 @@ summary(train_prepared)
 We got rid of BOROUGH, EASE.MENT, ADDRESS because BOROUGH variable has unanimous values, all the EASE.MENT values are NA, and ADDRESS will not be our main predictor. We also factorized high.end, TAX.CLASS.AT.TIME.OF.SALE, RESIDENTIAL UNITS,and COMMERCIAL UNITS. Now, we implemented the same data process to the test training set. 
 
 ```{r}
+# we must coerce the data into more purposeful data types
 test$TAX.CLASS.AT.TIME.OF.SALE<-as.factor(test$TAX.CLASS.AT.TIME.OF.SALE)
 test$LAND.SQUARE.FEET<-as.numeric(test$LAND.SQUARE.FEET)
 test$GROSS.SQUARE.FEET<-as.numeric(test$GROSS.SQUARE.FEET)
-
+# missing data in YEAR.BUILT must be accounted for
+# binary T/F variables are created if the building had any commerical/residential units
 test<-test%>%mutate(
   COMMERCIAL.UNITS=ifelse(COMMERCIAL.UNITS==0,F,T),
   RESIDENTIAL.UNITS=ifelse(RESIDENTIAL.UNITS==0,F,T),
   TOTAL.UNITS=ifelse(TOTAL.UNITS==0,F,T)
 )
-
+# lubridate used to extract the month, day, and year of the sale
+test$sale_year <- year(mdy(test$SALE.DATE))
+test$sale_month <- month(mdy(test$SALE.DATE))
+test$sale_day <- day(mdy(test$SALE.DATE))
+# how old is the building at the time of sale?
+test$sale_minus_built <- (test$sale_year - test$YEAR.BUILT)
+# drop features that will not be used
 test_prepared<-test%>%select(
   -BOROUGH, -EASE.MENT, -ADDRESS,-ZIP.CODE
 )
