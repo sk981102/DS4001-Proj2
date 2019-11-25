@@ -44,6 +44,8 @@ train <- train %>% mutate(
 train$sale_year <- year(mdy(train$SALE.DATE))
 train$sale_month <- as.factor(month(mdy(train$SALE.DATE)))
 train$sale_day <- as.factor(day(mdy(train$SALE.DATE)))
+train$sale_dayofweek <- as.factor(wday(mdy(train$SALE.DATE)))
+
 # determining old the building is at the time of sale?
 train$sale_minus_built <- (train$sale_year - train$YEAR.BUILT)
 # stripping the house numbers and apartment numbers from addresses to get just the street names
@@ -55,7 +57,7 @@ train_prepared <- train %>% dplyr::select(
 
 summary(train_prepared)
 ```
-We got rid of BOROUGH, EASE.MENT, and APARTMENT.NUMBER because the BOROUGH variable has no variation in values (always 1) and all the EASE.MENT values are NA, while the apartment number (though potentially useful with enough advanced parcing) was too complex and variable for us to break down. We stripped the details of the addresses to include just the street names so that it could potentially be used for future sales on the same street. We also factorized high.end, TAX.CLASS.AT.TIME.OF.SALE, ZIP.CODE, RESIDENTIAL UNITS,and COMMERCIAL UNITS. Below, we implemented the same data process to the test training set.
+We got rid of BOROUGH, EASE.MENT, and APARTMENT.NUMBER because the BOROUGH variable has no variation in values (always 1) and all the EASE.MENT values are NA, while the apartment number (though potentially useful with enough advanced parcing) was too complex and variable for us to break down. We stripped the details of the addresses to include just the street names so that it could potentially be used to help predict values of future sales on the same street. We also factorized high.end, TAX.CLASS.AT.TIME.OF.SALE, ZIP.CODE, RESIDENTIAL UNITS, COMMERCIAL UNITS, sale_month, sale_day, and sale_day_of_week. Below, we implemented the same data process to the test training set.
 
 ```{r}
 # we must coerce the data into more purposeful data types
@@ -77,8 +79,9 @@ test <- test %>% mutate(
 )
 # lubridate used to extract the month, day, and year of the sale
 test$sale_year <- year(mdy(test$SALE.DATE))
-test$sale_month <- month(mdy(test$SALE.DATE))
-test$sale_day <- day(mdy(test$SALE.DATE))
+test$sale_month <- as.factor(month(mdy(test$SALE.DATE)))
+test$sale_day <- as.factor(day(mdy(test$SALE.DATE)))
+test$sale_dayofweek <- as.factor(wday(mdy(test$SALE.DATE)))
 # how old is the building at the time of sale?
 test$sale_minus_built <- (test$sale_year - test$YEAR.BUILT)
 # stripping the house numbers and apartment numbers from addresses to get just the street names
@@ -93,15 +96,22 @@ summary(test_prepared)
 
 ## Exploratory Data Analysis 
 ```{r}
+# A plot showing high end vs. non high end sales by block and gross square footage
 ggplot(data=train_prepared)+geom_point(mapping =aes(x=BLOCK, 
                                                        y=GROSS.SQUARE.FEET,color=high.end))
+# It reveals little clear correlation other than an apparent lack of high end sales at very small gross footages and (unexpectedly) lower rates of high end sales at very high square footages as well
+
+# A plot showing high end vs. non high end sales by year built and block
 ggplot(data=train_prepared)+geom_point(mapping =aes(x=YEAR.BUILT, 
                                                     y=BLOCK,color=high.end))
-ggplot(data=train_prepared)+geom_point(mapping =aes(x=YEAR.BUILT,y=GROSS.SQUARE.FEET,color=high.end))
+# Though there is no clear trend, it appears that the houses built most recently (after 2000) have a higher likelihood of being in high end sales
+
+# A plot showing high end vs non high end sales within the midtown east neighborhood by land square footage and gross square footage
 ggplot(data=train_prepared%>%filter(NEIGHBORHOOD=="MIDTOWN EAST"))+
   geom_point(mapping =aes(x=LAND.SQUARE.FEET,y=GROSS.SQUARE.FEET,color=high.end))
+# This plot reveals that the vast majority of records have very low (1 ft^2) land square footages, which makes it hard to see any real trend, although of larger land properties with large (>1000 ft^2) gross square footages, a high proportion are high end sales.
 ```
-Based on these plots it appears that building models to predict high end sales will be pretty difficult process because there are no obvious direct correlations between these features and the high end outcome feature. 
+Based on these plots it appears that building models to predict high end sales will be a pretty difficult process because there are no obvious direct correlations between these features and the high end outcome variable. 
 
 ## Logistic Regression
 ```{r}
@@ -193,21 +203,27 @@ rnd.class<-randomForest(high.end ~ NEIGHBORHOOD + BUILDING.CLASS.CATEGORY +
 rnd.class
 importance(rnd.class)
 
-rf2 <- randomForest(train_prepared[,-20],train_prepared$high.end,
+# Built a second random forest model using all variables except those with more than 53 factors (building class at present and time of sale, address, and sale date)
+rf2 <- randomForest(train_prepared[,-c(7:9,18:20)],train_prepared$high.end,
                      sampsize=round(0.6*length(train_prepared[,20])),
                      ntree=500,mtry=sqrt(16),importance=TRUE)
+rf2
 
 levels(test_prepared$NEIGHBORHOOD) <- levels(train_prepared$NEIGHBORHOOD)
 levels(test_prepared$BUILDING.CLASS.CATEGORY) <- levels(train_prepared$BUILDING.CLASS.CATEGORY)
+levels(test_prepared$TAX.CLASS.AT.PRESENT) <- levels(train_prepared$TAX.CLASS.AT.PRESENT)
+levels(test_prepared$BUILDING.CLASS.AT.PRESENT) <- levels(train_prepared$BUILDING.CLASS.AT.PRESENT)
+levels(test_prepared$ADDRESS) <- levels(train_prepared$ADDRESS)
 levels(test_prepared$BLOCK) <- levels(train_prepared$BLOCK)
 levels(test_prepared$LOT) <- levels(train_prepared$LOT)
 levels(test_prepared$RESIDENTIAL.UNITS) <- levels(train_prepared$RESIDENTIAL.UNITS)
 levels(test_prepared$COMMERCIAL.UNITS) <- levels(train_prepared$COMMERCIAL.UNITS)
 levels(test_prepared$GROSS.SQUARE.FEET) <- levels(train_prepared$GROSS.SQUARE.FEET)
-levels(test_prepared$TAX.CLASS.AT.PRESENT) <- levels(train_prepared$TAX.CLASS.AT.PRESENT)
 levels(test_prepared$TAX.CLASS.AT.TIME.OF.SALE) <- levels(train_prepared$TAX.CLASS.AT.TIME.OF.SALE)
 levels(test_prepared$LAND.SQUARE.FEET) <- levels(train_prepared$LAND.SQUARE.FEET)
 
+
 rnd.pred<-predict(rnd.class,newdata=test_prepared) 
 
+rfpred <- predict(rf2,newdata=test_prepared)
 ```
