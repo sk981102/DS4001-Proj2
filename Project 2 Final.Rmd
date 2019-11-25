@@ -10,6 +10,13 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(ggplot2)
 library(lubridate)
+library(glmnet)
+library(ROCR)
+attach(train_prepared)
+library(tree)
+library(randomForest) ##for random forests (and bagging)
+library(gbm) ##for boosting
+
 ```
 
 ## Data Cleaning and Feature Engineering
@@ -91,6 +98,7 @@ test_prepared <- test %>% dplyr::select(
 summary(test_prepared)
 ```
 
+
 ## Exploratory Data Analysis 
 ```{r}
 ggplot(data=train_prepared)+geom_point(mapping =aes(x=BLOCK, 
@@ -105,13 +113,8 @@ Based on these plots it appears that building models to predict high end sales w
 
 ## Logistic Regression
 ```{r}
-library(glmnet)
-library(ROCR)
 
-summary(train_prepared)
-summary(test_prepared)
-attach(train_prepared)
-
+#model 1
 model <- glm(high.end~ NEIGHBORHOOD + BUILDING.CLASS.CATEGORY + 
              TAX.CLASS.AT.PRESENT + BLOCK + LOT + RESIDENTIAL.UNITS +
              COMMERCIAL.UNITS + LAND.SQUARE.FEET + GROSS.SQUARE.FEET +
@@ -144,6 +147,7 @@ plot(roc_result2, main="ROC Curve")+lines(x = c(0,1), y = c(0,1), col="red")
 confusion.mat2<-table(train_prepared$high.end,pred2 > 0.5)
 confusion.mat2
 ```
+When we were choosing which features to use for our logistic regression, we inputted every feature that can be used. For model 2, we took away a few features that was indicated as insiginificant by the summary function. However, at the end, model 1 had a better training accuracy, so we used model 1 to predict the high.end for the test. However, this could be an indication of overfitting. 
 
 ## Support Vector Machine
 ```{r}
@@ -153,6 +157,7 @@ library(MASS) ##for lda function
 library(ipred) ##for errorest function
 library(klaR) ##for partimat
 
+# Linear Discriminant Analysis, with all quantitative features
 lda.data <- lda(high.end~BLOCK+LOT+LAND.SQUARE.FEET+
                   YEAR.BUILT+GROSS.SQUARE.FEET
                 ,train_prepared)
@@ -165,7 +170,7 @@ pred<-predict(lda.data,newdata=test_prepared)
 high.end<-pred$class
 
 #### qda
-
+# Quadratic Discriminant Analysis, with all quantitative features
 qda.data <- qda(high.end~BLOCK+LOT+LAND.SQUARE.FEET+
                   YEAR.BUILT+GROSS.SQUARE.FEET
                 ,train_prepared)
@@ -176,14 +181,11 @@ mean(train$high.end==test_pred$class)
 pred<-predict(lda.data,newdata=test_prepared)
 high.end<-pred$class
 ```
-Support Vector Machine only takes quantitative features, so we knew that the model prediction will be limited. 
+Support Vector Machine only take quantitative features, so we knew that the model prediction will be limited. 
 
 ##Random Forest
 ```{r}
-library(tree)
-library(randomForest) ##for random forests (and bagging)
-library(gbm) ##for boosting
-
+# same features as the logistic regression
 rnd.class<-randomForest(high.end ~ NEIGHBORHOOD + BUILDING.CLASS.CATEGORY +
                          TAX.CLASS.AT.PRESENT + BLOCK + LOT + RESIDENTIAL.UNITS 
                         + COMMERCIAL.UNITS + LAND.SQUARE.FEET +
@@ -192,11 +194,11 @@ rnd.class<-randomForest(high.end ~ NEIGHBORHOOD + BUILDING.CLASS.CATEGORY +
                         importance=TRUE) 
 rnd.class
 importance(rnd.class)
+#Neighborhood and Building Class Category are the most important
+```
 
-rf2 <- randomForest(train_prepared[,-20],train_prepared$high.end,
-                     sampsize=round(0.6*length(train_prepared[,20])),
-                     ntree=500,mtry=sqrt(16),importance=TRUE)
-
+```{r}
+# necessary to prevent leveling error from happening
 levels(test_prepared$NEIGHBORHOOD) <- levels(train_prepared$NEIGHBORHOOD)
 levels(test_prepared$BUILDING.CLASS.CATEGORY) <- levels(train_prepared$BUILDING.CLASS.CATEGORY)
 levels(test_prepared$BLOCK) <- levels(train_prepared$BLOCK)
@@ -209,5 +211,12 @@ levels(test_prepared$TAX.CLASS.AT.TIME.OF.SALE) <- levels(train_prepared$TAX.CLA
 levels(test_prepared$LAND.SQUARE.FEET) <- levels(train_prepared$LAND.SQUARE.FEET)
 
 rnd.pred<-predict(rnd.class,newdata=test_prepared) 
-
 ```
+Surprisingly, the random forest model yielded poor performance on the test data with approximately 68% accuracy.
+
+
+## Neural Network
+We also built nerual network on python. 
+
+
+## Conclusion
