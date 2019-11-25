@@ -12,21 +12,62 @@ library(ggplot2)
 library(lubridate)
 ```
 
-##Data Cleaning
+## Data Cleaning and Feature Engineering
 ```{r}
 # importing the train and test data sets
 train <- read.csv("sales_manhattan_train_set.csv")
 test <- read.csv("sales_manhattan_test_set.csv")
 # we must coerce the data into more purposeful data types
-# high end and tax class should be categorical
+# high end, tax class, and zip code should be categorical
 train$high.end <- as.factor(train$high.end)
 train$TAX.CLASS.AT.TIME.OF.SALE <- as.factor(train$TAX.CLASS.AT.TIME.OF.SALE)
+train$ZIP.CODE <- as.factor(train$ZIP.CODE)
 # and square footages should be numeric
 train$LAND.SQUARE.FEET <- as.numeric(train$LAND.SQUARE.FEET)
 train$GROSS.SQUARE.FEET <- as.numeric(train$GROSS.SQUARE.FEET)
 # missing data in YEAR.BUILT must be accounted for
 # binary T/F variables are created if the building had any commerical/residential units
+levels(train$BUILDING.CLASS.AT.TIME.OF.SALE) <- levels(train$BUILDING.CLASS.AT.PRESENT)
 train <- train %>% mutate(
+  COMMERCIAL.UNITS = ifelse(COMMERCIAL.UNITS==0,F,T),
+  RESIDENTIAL.UNITS = ifelse(RESIDENTIAL.UNITS==0,F,T),
+  TOTAL.UNITS = ifelse(TOTAL.UNITS==0,F,T),
+  # assuming that buildings missing years were constructed in 1932
+  # since this is when our records begin
+  YEAR.BUILT=ifelse(YEAR.BUILT==0,1932,YEAR.BUILT)
+)
+# We also attempted to look into whether the building class had changed and whether this was a relevant factor using the following code:
+# BUILDING.CLASS.CHANGE = ifelse(BUILDING.CLASS.AT.PRESENT!=BUILDING.CLASS.AT.TIME.OF.SALE,T,F),
+# but this revealed that in fact the building class had changed for every single record in the dataset, meaning that it wasn't a helpful engineered feature
+
+# Lubridate was used to extract the month, day, and year of the sale
+train$sale_year <- year(mdy(train$SALE.DATE))
+train$sale_month <- as.factor(month(mdy(train$SALE.DATE)))
+train$sale_day <- as.factor(day(mdy(train$SALE.DATE)))
+# determining old the building is at the time of sale?
+train$sale_minus_built <- (train$sale_year - train$YEAR.BUILT)
+# stripping the house numbers and apartment numbers from addresses to get just the street names
+train$ADDRESS <- as.factor(gsub(",.*$", "", sub("^\\S+\\s+", '', train$ADDRESS)))
+# drop features that will not be used
+train_prepared <- train %>% dplyr::select(
+  -BOROUGH, -EASE.MENT, -APARTMENT.NUMBER
+)
+
+summary(train_prepared)
+```
+We got rid of BOROUGH, EASE.MENT, and APARTMENT.NUMBER because the BOROUGH variable has no variation in values (always 1) and all the EASE.MENT values are NA, while the apartment number (though potentially useful with enough advanced parcing) was too complex and variable for us to break down. We stripped the details of the addresses to include just the street names so that it could potentially be used for future sales on the same street. We also factorized high.end, TAX.CLASS.AT.TIME.OF.SALE, ZIP.CODE, RESIDENTIAL UNITS,and COMMERCIAL UNITS. Below, we implemented the same data process to the test training set.
+
+```{r}
+# we must coerce the data into more purposeful data types
+# high end, tax class, and building classes should be categorical
+test$TAX.CLASS.AT.TIME.OF.SALE <- as.factor(test$TAX.CLASS.AT.TIME.OF.SALE)
+test$ZIP.CODE <- as.factor(test$ZIP.CODE)
+# and square footages should be numeric
+test$LAND.SQUARE.FEET <- as.numeric(test$LAND.SQUARE.FEET)
+test$GROSS.SQUARE.FEET <- as.numeric(test$GROSS.SQUARE.FEET)
+# missing data in YEAR.BUILT must be accounted for
+# binary T/F variables are created if the building had any commerical/residential units
+test <- test %>% mutate(
   COMMERCIAL.UNITS=ifelse(COMMERCIAL.UNITS==0,F,T),
   RESIDENTIAL.UNITS=ifelse(RESIDENTIAL.UNITS==0,F,T),
   TOTAL.UNITS=ifelse(TOTAL.UNITS==0,F,T),
@@ -35,21 +76,20 @@ train <- train %>% mutate(
   YEAR.BUILT=ifelse(YEAR.BUILT==0,1932,YEAR.BUILT)
 )
 # lubridate used to extract the month, day, and year of the sale
-train$sale_year <- year(mdy(train$SALE.DATE))
-train$sale_month <- month(mdy(train$SALE.DATE))
-train$sale_day <- day(mdy(train$SALE.DATE))
+test$sale_year <- year(mdy(test$SALE.DATE))
+test$sale_month <- month(mdy(test$SALE.DATE))
+test$sale_day <- day(mdy(test$SALE.DATE))
 # how old is the building at the time of sale?
-train$sale_minus_built <- (train$sale_year - train$YEAR.BUILT)
+test$sale_minus_built <- (test$sale_year - test$YEAR.BUILT)
 # stripping the house numbers and apartment numbers from addresses to get just the street names
-train$ADDRESS <- as.factor(gsub(",.*$", "", sub("^\\S+\\s+", '', train$ADDRESS)))
+test$ADDRESS <- as.factor(gsub(",.*$", "", sub("^\\S+\\s+", '', test$ADDRESS)))
 # drop features that will not be used
-train_prepared <- train %>% select(
-  -BOROUGH, -EASE.MENT
+test_prepared <- test %>% dplyr::select(
+  -BOROUGH, -EASE.MENT, -APARTMENT.NUMBER
 )
 
-summary(train_prepared)
+summary(test_prepared)
 ```
-We got rid of BOROUGH, EASE.MENT, ADDRESS because BOROUGH variable has unanimous values (always 1), all the EASE.MENT values are NA, and ADDRESS will not be a primary predictor - the street name could potentially be useful but . We also factorized high.end, TAX.CLASS.AT.TIME.OF.SALE, RESIDENTIAL UNITS,and COMMERCIAL UNITS. Now, we implemented the same data process to the test training set. 
 
 ## Exploratory Data Analysis 
 ```{r}
@@ -57,13 +97,11 @@ ggplot(data=train_prepared)+geom_point(mapping =aes(x=BLOCK,
                                                        y=GROSS.SQUARE.FEET,color=high.end))
 ggplot(data=train_prepared)+geom_point(mapping =aes(x=YEAR.BUILT, 
                                                     y=BLOCK,color=high.end))
-ggplot(data=train_prepared)+geom_point(mapping =aes(x=YEAR.BUILT, 
-                                                    y=GROSS.SQUARE.FEET,color=high.end))
+ggplot(data=train_prepared)+geom_point(mapping =aes(x=YEAR.BUILT,y=GROSS.SQUARE.FEET,color=high.end))
 ggplot(data=train_prepared%>%filter(NEIGHBORHOOD=="MIDTOWN EAST"))+
   geom_point(mapping =aes(x=LAND.SQUARE.FEET,y=GROSS.SQUARE.FEET,color=high.end))
 ```
-This will be pretty difficult process building models because there is no apparent correlation between different features and its relationship with the high.end feature. 
-
+Based on these plots it appears that building models to predict high end sales will be pretty difficult process because there are no obvious direct correlations between these features and the high end outcome feature. 
 
 ## Logistic Regression
 ```{r}
@@ -74,28 +112,28 @@ summary(train_prepared)
 summary(test_prepared)
 attach(train_prepared)
 
-model<-glm(high.end~ NEIGHBORHOOD+BUILDING.CLASS.CATEGORY+TAX.CLASS.AT.PRESENT+
-             BLOCK+LOT+RESIDENTIAL.UNITS+
-             COMMERCIAL.UNITS+LAND.SQUARE.FEET+GROSS.SQUARE.FEET+YEAR.BUILT
-             +TAX.CLASS.AT.TIME.OF.SALE,family=binomial)
+model <- glm(high.end~ NEIGHBORHOOD + BUILDING.CLASS.CATEGORY + 
+             TAX.CLASS.AT.PRESENT + BLOCK + LOT + RESIDENTIAL.UNITS +
+             COMMERCIAL.UNITS + LAND.SQUARE.FEET + GROSS.SQUARE.FEET +
+             YEAR.BUILT + TAX.CLASS.AT.TIME.OF.SALE, family=binomial)
 summary(model)
-pred<-predict(model,newdata=train_prepared)
+pred <- predict(model,newdata=train_prepared)
 
-rates<-prediction(pred, train_prepared$high.end)
-roc_result<-performance(rates,measure="tpr", x.measure="fpr")
-plot(roc_result, main="ROC Curve")+lines(x = c(0,1), y = c(0,1), col="red")
+rates <- prediction(pred, train_prepared$high.end)
+roc_result <- performance(rates,measure="tpr", x.measure="fpr")
+plot(roc_result, main="ROC Curve") + lines(x = c(0,1), y = c(0,1), col="red")
 
-confusion.mat<-table(train_prepared$high.end,pred > 0.5)
+confusion.mat <- table(train_prepared$high.end,pred > 0.5)
 confusion.mat
 
 (8174+2021)/(14150)
 
 
 ## model 2 using Logistic regression
-model2<-glm(high.end~ NEIGHBORHOOD+BUILDING.CLASS.CATEGORY+
-             BLOCK+LOT+BUILDING.CLASS.AT.PRESENT+RESIDENTIAL.UNITS+
-             COMMERCIAL.UNITS+GROSS.SQUARE.FEET+
-             TAX.CLASS.AT.TIME.OF.SALE+BUILDING.CLASS.AT.TIME.OF.SALE,family=binomial)
+model2<-glm(high.end~ NEIGHBORHOOD + BUILDING.CLASS.CATEGORY +
+             BLOCK + LOT + BUILDING.CLASS.AT.PRESENT + RESIDENTIAL.UNITS +
+             COMMERCIAL.UNITS + GROSS.SQUARE.FEET+ TAX.CLASS.AT.TIME.OF.SALE +
+             BUILDING.CLASS.AT.TIME.OF.SALE, family=binomial)
 
 pred2<-predict(model,newdata=train_prepared)
 
@@ -106,7 +144,6 @@ plot(roc_result2, main="ROC Curve")+lines(x = c(0,1), y = c(0,1), col="red")
 confusion.mat2<-table(train_prepared$high.end,pred2 > 0.5)
 confusion.mat2
 ```
-
 
 ## Support Vector Machine
 ```{r}
@@ -127,7 +164,6 @@ plot(lda.data, col = as.integer(train_prepared$high.end), main="LDA")
 pred<-predict(lda.data,newdata=test_prepared)
 high.end<-pred$class
 
-
 #### qda
 
 qda.data <- qda(high.end~BLOCK+LOT+LAND.SQUARE.FEET+
@@ -136,7 +172,6 @@ qda.data <- qda(high.end~BLOCK+LOT+LAND.SQUARE.FEET+
 test_pred<-predict(qda.data,newdata=train_prepared)
 table(train$high.end,test_pred$class)
 mean(train$high.end==test_pred$class)
-
 
 pred<-predict(lda.data,newdata=test_prepared)
 high.end<-pred$class
@@ -149,15 +184,18 @@ library(tree)
 library(randomForest) ##for random forests (and bagging)
 library(gbm) ##for boosting
 
-
-rnd.class<-randomForest(high.end~ NEIGHBORHOOD +BUILDING.CLASS.CATEGORY +
-                         TAX.CLASS.AT.PRESENT+BLOCK + LOT + RESIDENTIAL.UNITS 
-                        + COMMERCIAL.UNITS + LAND.SQUARE.FEET+
-                          TAX.CLASS.AT.TIME.OF.SALE+
+rnd.class<-randomForest(high.end ~ NEIGHBORHOOD + BUILDING.CLASS.CATEGORY +
+                         TAX.CLASS.AT.PRESENT + BLOCK + LOT + RESIDENTIAL.UNITS 
+                        + COMMERCIAL.UNITS + LAND.SQUARE.FEET +
+                          TAX.CLASS.AT.TIME.OF.SALE +
                           GROSS.SQUARE.FEET,data=train_prepared,mtry=6,
                         importance=TRUE) 
 rnd.class
 importance(rnd.class)
+
+rf2 <- randomForest(train_prepared[,-20],train_prepared$high.end,
+                     sampsize=round(0.6*length(train_prepared[,20])),
+                     ntree=500,mtry=sqrt(16),importance=TRUE)
 
 levels(test_prepared$NEIGHBORHOOD) <- levels(train_prepared$NEIGHBORHOOD)
 levels(test_prepared$BUILDING.CLASS.CATEGORY) <- levels(train_prepared$BUILDING.CLASS.CATEGORY)
@@ -171,4 +209,5 @@ levels(test_prepared$TAX.CLASS.AT.TIME.OF.SALE) <- levels(train_prepared$TAX.CLA
 levels(test_prepared$LAND.SQUARE.FEET) <- levels(train_prepared$LAND.SQUARE.FEET)
 
 rnd.pred<-predict(rnd.class,newdata=test_prepared) 
+
 ```
