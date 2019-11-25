@@ -207,17 +207,17 @@ importance(rnd.class)
 #Neighborhood and Building Class Category are the most important
 ```
 
-<<<<<<< HEAD
+
 ```{r}
 # necessary to prevent leveling error from happening
-=======
+
 # Built a second random forest model using all variables except those with more than 53 factors (building class at present and time of sale, address, and sale date)
 rf2 <- randomForest(train_prepared[,-c(7:9,18:20)],train_prepared$high.end,
                      sampsize=round(0.6*length(train_prepared[,20])),
                      ntree=500,mtry=sqrt(16),importance=TRUE)
 rf2
 
->>>>>>> 49b86d6e418b32f9acd69430cf8bb8a0a1042ee7
+
 levels(test_prepared$NEIGHBORHOOD) <- levels(train_prepared$NEIGHBORHOOD)
 levels(test_prepared$BUILDING.CLASS.CATEGORY) <- levels(train_prepared$BUILDING.CLASS.CATEGORY)
 levels(test_prepared$TAX.CLASS.AT.PRESENT) <- levels(train_prepared$TAX.CLASS.AT.PRESENT)
@@ -233,20 +233,27 @@ levels(test_prepared$LAND.SQUARE.FEET) <- levels(train_prepared$LAND.SQUARE.FEET
 
 
 rnd.pred<-predict(rnd.class,newdata=test_prepared) 
-<<<<<<< HEAD
 ```
 Surprisingly, the random forest model yielded poor performance on the test data with approximately 68% accuracy.
 
 
-## Neural Network
-We also built nerual network on python. 
+## Boosting 
+```{r}
+library(adabag)
 
+boost.class<-boosting(high.end~NEIGHBORHOOD + BUILDING.CLASS.CATEGORY +
+                   TAX.CLASS.AT.PRESENT + BLOCK + LOT+ LAND.SQUARE.FEET +
+                   TAX.CLASS.AT.TIME.OF.SALE +GROSS.SQUARE.FEET, 
+                 data=train_prepared,boos=F,mfinal=20)
+boost.class
+pred.train.boost<-predict(boost.class, newdata=train_prepared, 
+                          n.trees=500, type = "response")
 
-## Conclusion
-=======
-
-rfpred <- predict(rf2,newdata=test_prepared)
+mean(pred.train.boost$class==train_prepared$high.end) #0.8209894
 ```
+
+
 ## Dense Neural Network
 The final machine learning method applied to this problem was a Dense Neural Network (DNN). Due to the computational complexity and wide variety of hyperparameters that must be tuned, this analysis was done in a seperate .ipynb file attached to this project. The goal of the DNN is the same as the methods above: binary classification. In order to accomplish this, the final layer of the network must be a single node that's activation function is the sigmoid function. The other hidden layers of the DNN use the industry standard relu function for activation of nodes. The architecture of the DNN is that of a funnel. Due to the large number of input dimensions, a result of one hot encoding categorical variables with many dimensions, through many levels of testing it was decided that this was the best was to coerce the DNN into sufficiently condensing all the information the training data had to offer. At each hidden layer a kernel constraint was added to ensure that no single node could "take over" the entire network and skew predictions. Again through a series of testing, it was decided that the adam optimizer and binary cross-entropy loss function should be used. Adam is a well-known optimizer of deep neural networks and allows the gradient descent function to "remember" recent gradients so that any one too aggressive step is not taken as local/global maxima are converged upon. Binary cross-entropy is the standard loss function suggested for binary classification problems due to it's binary nature. Multi-level classification problems use a slightly different loss function for any number of response classes greater than two. 
->>>>>>> 49b86d6e418b32f9acd69430cf8bb8a0a1042ee7
+
+
