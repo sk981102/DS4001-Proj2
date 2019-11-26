@@ -175,7 +175,7 @@ table(train$high.end,test_pred$class)
 mean(train$high.end==test_pred$class)
 plot(lda.data, col = as.integer(train_prepared$high.end), main="LDA")
 
-pred<-predict(lda.data,newdata=test_prepared)
+pred<-predict(lda.data,newdata=test_prepared) #73.7%
 high.end<-pred$class
 
 #### qda
@@ -187,7 +187,7 @@ test_pred<-predict(qda.data,newdata=train_prepared)
 table(train$high.end,test_pred$class)
 mean(train$high.end==test_pred$class)
 
-pred<-predict(lda.data,newdata=test_prepared)
+pred<-predict(lda.data,newdata=test_prepared) #75.321%
 high.end<-pred$class
 ```
 Support Vector Machine only take quantitative features, so we knew that the model prediction will be limited. 
@@ -202,20 +202,14 @@ rnd.class<-randomForest(high.end ~ NEIGHBORHOOD + BUILDING.CLASS.CATEGORY +
                           GROSS.SQUARE.FEET,data=train_prepared,mtry=6,
                         importance=TRUE) 
 rnd.class
-importance(rnd.class)
+importance(rnd.class) #15.11% error rate
 #Neighborhood and Building Class Category are the most important
+
 ```
 
 
-```{r}
-# Built a second random forest model using all variables except those with more than 53 factors (building class at present and time of sale, address, and sale date)
-rf2 <- randomForest(train_prepared[,-c(1,7:9,17:19)],train_prepared$high.end,
-                     sampsize=round(0.6*length(train_prepared[,20])),
-                    ntree=500,mtry=sqrt(16),importance=TRUE)
-rf2
-importance(rf2)
-# Again neighborhood and building class category are among the most important, along with gross square footage, sale day, sale month, building age, block, and lot
 
+```{r}
 # necessary to prevent leveling error from happening
 levels(test_prepared$NEIGHBORHOOD) <- levels(train_prepared$NEIGHBORHOOD)
 levels(test_prepared$BUILDING.CLASS.CATEGORY) <- levels(train_prepared$BUILDING.CLASS.CATEGORY)
@@ -234,12 +228,6 @@ levels(test_prepared$ADDRESS) <- levels(train_prepared$ADDRESS)
 levels(test_prepared$BUILDING.CLASS.AT.TIME.OF.SALE) <- levels(train_prepared$BUILDING.CLASS.AT.TIME.OF.SALE)
 levels(test_prepared$SALE.DATE) <- levels(train_prepared$SALE.DATE)
 
-rnd.train.pred<-predict(rnd.class,newdata=train_prepared) 
-
-CrossTable(train_prepared$high.end, rnd.train.pred,
-           prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
-           dnn = c('actual diagnosis', 'predicted diagnosis')) #0.963 accuracy
-
 rnd.pred<-predict(rnd.class,newdata=test_prepared) 
 ```
 Surprisingly, the random forest model yielded poor performance on the test data with approximately 68% accuracy and 71% accuracy respectively for the two models. 
@@ -256,21 +244,30 @@ boost.class<-boosting(high.end~NEIGHBORHOOD + BUILDING.CLASS.CATEGORY +
 pred.train.boost<-predict(boost.class, newdata=train_prepared, 
                           n.trees=500, type = "response")
 
-mean(pred.train.boost$class==train_prepared$high.end) #0.8209894
+mean(pred.train.boost$class==train_prepared$high.end) #0.8209894 accuracy
 CrossTable(train_prepared$high.end, boost.class$class,
            prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
            dnn = c('actual diagnosis', 'predicted diagnosis'))
 
-boost2 <- boosting(high.end ~ ., data=train_prepared, boos = FALSE, mfinal=50)
+
+boost2 <- boosting(high.end ~ NEIGHBORHOOD+TAX.CLASS.AT.PRESENT+BLOCK+LOT+
+                     RESIDENTIAL.UNITS+COMMERCIAL.UNITS+
+                     TOTAL.UNITS+LAND.SQUARE.FEET+
+                     GROSS.SQUARE.FEET+YEAR.BUILT+TAX.CLASS.AT.TIME.OF.SALE
+                   , data=train_prepared, boos = FALSE, mfinal=50)
 errorevol(boost2, train_prepared)
+
+pred.train.boost2<-predict(boost2, newdata=train_prepared, 
+                          n.trees=500, type = "response")
+
+mean(pred.train.boost2$class==train_prepared$high.end) #0.8344876
+CrossTable(train_prepared$high.end, boost2$class,
+           prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+           dnn = c('actual diagnosis', 'predicted diagnosis'))
 #Grid <- expand.grid(maxdepth=c(1,2,3,4,5,6,7),nu=.01,iter=c(50,100,150,200))
 #results_ada = train(high.end~., data=train_prepared, method="ada", trControl=cv_opts,tuneGrid=Grid)
-boostpred <- predict(boost2,test_prepared)
-boostpreds <- as.data.frame(boostpred$class)
-write.csv(boostpreds, "boostpredictions.csv")
-
 ```
-
+The boost also massively overfit the data; for the training set, it yielded 71.1% accuracy.
 
 ## Dense Neural Network
 The final machine learning method applied to this problem was a Dense Neural Network (DNN). Due to the computational complexity and wide variety of hyperparameters that must be tuned, this analysis was done in a seperate .ipynb file attached to this project. The goal of the DNN is the same as the methods above: binary classification. In order to accomplish this, the final layer of the network must be a single node that's activation function is the sigmoid function. The other hidden layers of the DNN use the industry standard relu function for activation of nodes. The architecture of the DNN is that of a funnel. Due to the large number of input dimensions, a result of one hot encoding categorical variables with many dimensions, through many levels of testing it was decided that this was the best was to coerce the DNN into sufficiently condensing all the information the training data had to offer. At each hidden layer a kernel constraint was added to ensure that no single node could "take over" the entire network and skew predictions. Again through a series of testing, it was decided that the adam optimizer and binary cross-entropy loss function should be used. Adam is a well-known optimizer of deep neural networks and allows the gradient descent function to "remember" recent gradients so that any one too aggressive step is not taken as local/global maxima are converged upon. Binary cross-entropy is the standard loss function suggested for binary classification problems due to it's binary nature. Multi-level classification problems use a slightly different loss function for any number of response classes greater than two. 
