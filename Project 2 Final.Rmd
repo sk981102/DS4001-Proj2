@@ -208,15 +208,15 @@ importance(rnd.class)
 
 
 ```{r}
-# necessary to prevent leveling error from happening
-
 # Built a second random forest model using all variables except those with more than 53 factors (building class at present and time of sale, address, and sale date)
-rf2 <- randomForest(train_prepared[,-c(7:9,18:20)],train_prepared$high.end,
+rf2 <- randomForest(train_prepared[,-c(1,7:9,17:19)],train_prepared$high.end,
                      sampsize=round(0.6*length(train_prepared[,20])),
                     ntree=500,mtry=sqrt(16),importance=TRUE)
 rf2
+importance(rf2)
+# Again neighborhood and building class category are among the most important, along with gross square footage, sale day, sale month, building age, block, and lot
 
-
+# necessary to prevent leveling error from happening
 levels(test_prepared$NEIGHBORHOOD) <- levels(train_prepared$NEIGHBORHOOD)
 levels(test_prepared$BUILDING.CLASS.CATEGORY) <- levels(train_prepared$BUILDING.CLASS.CATEGORY)
 levels(test_prepared$TAX.CLASS.AT.PRESENT) <- levels(train_prepared$TAX.CLASS.AT.PRESENT)
@@ -229,6 +229,10 @@ levels(test_prepared$COMMERCIAL.UNITS) <- levels(train_prepared$COMMERCIAL.UNITS
 levels(test_prepared$GROSS.SQUARE.FEET) <- levels(train_prepared$GROSS.SQUARE.FEET)
 levels(test_prepared$TAX.CLASS.AT.TIME.OF.SALE) <- levels(train_prepared$TAX.CLASS.AT.TIME.OF.SALE)
 levels(test_prepared$LAND.SQUARE.FEET) <- levels(train_prepared$LAND.SQUARE.FEET)
+levels(test_prepared$BUILDING.CLASS.AT.PRESENT) <- levels(train_prepared$BUILDING.CLASS.AT.PRESENT)
+levels(test_prepared$ADDRESS) <- levels(train_prepared$ADDRESS)
+levels(test_prepared$BUILDING.CLASS.AT.TIME.OF.SALE) <- levels(train_prepared$BUILDING.CLASS.AT.TIME.OF.SALE)
+levels(test_prepared$SALE.DATE) <- levels(train_prepared$SALE.DATE)
 
 rnd.train.pred<-predict(rnd.class,newdata=train_prepared) 
 
@@ -238,7 +242,7 @@ CrossTable(train_prepared$high.end, rnd.train.pred,
 
 rnd.pred<-predict(rnd.class,newdata=test_prepared) 
 ```
-Surprisingly, the random forest model yielded poor performance on the test data with approximately 68% accuracy.
+Surprisingly, the random forest model yielded poor performance on the test data with approximately 68% accuracy and 71% accuracy respectively for the two models. 
 
 
 ## Boosting 
@@ -256,6 +260,14 @@ mean(pred.train.boost$class==train_prepared$high.end) #0.8209894
 CrossTable(train_prepared$high.end, boost.class$class,
            prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
            dnn = c('actual diagnosis', 'predicted diagnosis'))
+
+boost2 <- boosting(high.end ~ ., data=train_prepared, boos = FALSE, mfinal=50)
+errorevol(boost2, train_prepared)
+#Grid <- expand.grid(maxdepth=c(1,2,3,4,5,6,7),nu=.01,iter=c(50,100,150,200))
+#results_ada = train(high.end~., data=train_prepared, method="ada", trControl=cv_opts,tuneGrid=Grid)
+boostpred <- predict(boost2,test_prepared)
+boostpreds <- as.data.frame(boostpred$class)
+write.csv(boostpreds, "boostpredictions.csv")
 
 ```
 
